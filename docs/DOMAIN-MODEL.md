@@ -19,7 +19,9 @@ Owns repository identity, ownership, ecosystem, default branch, and primary pack
 
 ### Dependency Analysis
 
-Owns scans, dependency counts, graph traversal, and the shortest path from an application to a vulnerable transitive package.
+Owns scans, normalized components, dependency edges, SBOM imports, graph traversal, and the shortest path from an application to a vulnerable transitive package.
+
+An imported CycloneDX document becomes a directed graph. Components are identified by `bom-ref` and stored through their package URL (PURL). Repository-component relationships retain whether a package is direct, transitive, or isolated and its minimum breadth-first depth.
 
 ### Vulnerability Intelligence
 
@@ -49,3 +51,14 @@ Records repository creation, completed scans, and policy changes with an entity 
 ## Graph algorithm
 
 Dependency relationships form a directed graph. SupplyLens uses breadth-first search to identify the shortest known path from the repository root to a vulnerable package. This is useful because a shorter path usually gives developers a clearer remediation owner and fewer intermediate upgrades.
+
+The analyzer also uses a depth-first color walk to detect circular dependency chains without looping forever. Import metrics include component count, direct and transitive totals, isolated nodes, maximum depth, cycle count, and license coverage.
+
+## SBOM import invariants
+
+- Only CycloneDX documents are accepted.
+- A document contains 1–500 uniquely referenced components and stays within 512 KB at the HTTP boundary.
+- Unknown dependency references are ignored instead of creating phantom components.
+- If no root dependency list exists, declared components are conservatively treated as direct dependencies.
+- PURLs are unique in the component catalog; repository relationships and edges remain repository-scoped.
+- Imported vulnerabilities are converted into the same finding model used by scans, including severity, CVSS, remediation, directness, and the shortest dependency path.

@@ -17,6 +17,9 @@ Software supply-chain failures are listed as **A03 in the OWASP Top 10:2025**. M
 - Immutable audit events for repository, scan, and policy mutations
 - Vulnerability queue ordered by severity and exposure
 - Direct versus transitive dependency paths
+- CycloneDX SBOM ingestion with a 500-component and 512 KB safety limit
+- Dependency-graph analysis with breadth-first depth, shortest exposure paths, cycle detection, isolated-node detection, and license coverage
+- Normalized PURL-indexed component inventory and persisted dependency edges
 - Live package-version checks against the public OSV API
 - Configurable security policies and coverage score
 - JSON security-report export
@@ -35,6 +38,7 @@ flowchart LR
   APP --> DOMAIN[Domain services]
   APP --> DB[(Cloudflare D1)]
   API --> OSV[OSV vulnerability API]
+  SBOM[CycloneDX SBOM] --> API
 
   subgraph Bounded contexts
     RI[Repository Inventory]
@@ -75,6 +79,7 @@ npm run db:generate
 npm run build
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_*.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_*.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_*.sql
 npm run dev
 ```
 
@@ -101,6 +106,7 @@ npm run build
 | `/api/scans` | `POST` | Run and persist a repository scan |
 | `/api/policies` | `PATCH` | Enable or pause a policy |
 | `/api/osv` | `POST` | Query live OSV advisories |
+| `/api/sbom` | `POST` | Validate, analyze, and persist a CycloneDX dependency graph |
 
 ## Engineering evidence
 
@@ -114,6 +120,7 @@ npm run build
 
 - External package input is length- and ecosystem-validated before OSV requests.
 - Strict Zod contracts reject unknown fields, invalid identifiers, and unsupported ecosystems.
+- SBOM bodies are capped at 512 KB and 500 components before graph processing; duplicate references and unsupported formats are rejected.
 - The OSV client has an eight-second timeout and normalizes upstream failures without exposing internals.
 - Mutations write append-only audit events for traceability.
 - No repository credentials or source code are collected.
