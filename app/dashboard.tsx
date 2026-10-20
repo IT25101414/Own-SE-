@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
-  Check, ChevronRight, Database, Download, ExternalLink, FileJson, Loader2, Menu,
-  Plus, ScanSearch, ShieldCheck, TriangleAlert, UploadCloud, X,
+  Bell, Check, ChevronRight, Command, Database, Download, ExternalLink, FileJson, Loader2, Menu,
+  Moon, Plus, ScanSearch, ShieldCheck, Sun, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { DashboardData, Repository } from "@/lib/types";
 import {
-  Architecture, Findings, Overview, Policies, Repositories, SbomLab, navigation,
+  Alerts, Architecture, Findings, Overview, Policies, Repositories, RiskDiff, SbomLab, navigation,
   type View,
 } from "@/components/supplylens/views";
 
@@ -42,7 +42,9 @@ const viewCopy: Record<View, { eyebrow: string; title: string; description: stri
   repositories: { eyebrow: "Repository inventory", title: "Know what you ship.", description: "Track ecosystems, dependency volume, scan health, and ownership." },
   sbom: { eyebrow: "Software bill of materials", title: "Map every dependency relationship.", description: "Import CycloneDX, analyze the graph, and persist a traceable component inventory." },
   findings: { eyebrow: "Vulnerability intelligence", title: "Fix what matters first.", description: "Investigate direct and transitive exposure with clear upgrade paths." },
+  riskdiff: { eyebrow: "Change intelligence", title: "See exactly what moved.", description: "Compare persisted scans, risk posture, dependency volume, and finding counts without fabricated evidence." },
   policies: { eyebrow: "Policy engine", title: "Turn standards into guardrails.", description: "Apply consistent release checks without slowing down developers." },
+  alerts: { eyebrow: "Security operations", title: "One inbox for urgent risk.", description: "Triage critical findings, policy failures, scan activity, and remediation work." },
   architecture: { eyebrow: "Engineering evidence", title: "Designed as a modular monolith.", description: "A practical DDD architecture with testable domain services and clear boundaries." },
 };
 
@@ -60,9 +62,30 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
   const [repositoryModal, setRepositoryModal] = useState(false);
   const [checkModal, setCheckModal] = useState(false);
   const [sbomModal, setSbomModal] = useState(false);
+  const [commandModal, setCommandModal] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [osvResult, setOsvResult] = useState<OsvResult | null>(null);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("supplylens-theme");
+    const frame = stored === "light" || stored === "dark"
+      ? window.requestAnimationFrame(() => setTheme(stored))
+      : 0;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandModal((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
 
   const filteredFindings = useMemo(() => {
     const query = search.toLowerCase();
@@ -78,6 +101,12 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
   const notify = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(null), 3200);
+  };
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    window.localStorage.setItem("supplylens-theme", next);
   };
 
   async function handleAddRepository(event: FormEvent<HTMLFormElement>) {
@@ -186,7 +215,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
   const copy = viewCopy[view];
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand"><LogoMark /><span>SupplyLens</span></div>
         <p className="workspace-label">Workspace</p>
@@ -195,6 +224,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
             <button key={id} className={`nav-item ${view === id ? "active" : ""}`} onClick={() => selectView(id)}>
               <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
               {id === "findings" && <span className="nav-count">{data.stats.openFindings}</span>}
+              {id === "alerts" && <span className="nav-count alert-count">{data.stats.critical}</span>}
             </button>
           ))}
         </nav>
@@ -216,6 +246,9 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
           <button className="icon-button menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation"><Menu size={20} /></button>
           <div className="breadcrumb"><span>SupplyLens</span><ChevronRight size={14} /><strong>{navigation.find((item) => item.id === view)?.label}</strong></div>
           <div className="top-actions">
+            <button className="command-trigger" onClick={() => setCommandModal(true)}><Command size={15} /><span>Search</span><kbd>⌘ K</kbd></button>
+            <button className="icon-button notification-button" onClick={() => selectView("alerts")} aria-label="Open alert center"><Bell size={17} />{data.stats.critical > 0 && <i />}</button>
+            <button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button>
             <button className="text-button" onClick={exportReport}><Download size={16} />Export report</button>
             <button className="secondary-button" onClick={() => setCheckModal(true)}><ScanSearch size={17} />Check dependency</button>
             <button className="primary-button" onClick={() => setRepositoryModal(true)}><Plus size={17} />Add repository</button>
@@ -231,7 +264,9 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
           {view === "repositories" && <Repositories data={data} onScan={handleScan} busy={busy} onAdd={() => setRepositoryModal(true)} />}
           {view === "sbom" && <SbomLab data={data} onImport={() => setSbomModal(true)} />}
           {view === "findings" && <Findings findings={filteredFindings} search={search} setSearch={setSearch} />}
+          {view === "riskdiff" && <RiskDiff data={data} />}
           {view === "policies" && <Policies data={data} onToggle={handlePolicy} busy={busy} />}
+          {view === "alerts" && <Alerts data={data} onView={selectView} />}
           {view === "architecture" && <Architecture />}
         </div>
       </main>
@@ -262,6 +297,10 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
           <p className="form-note"><FileJson size={15} />CycloneDX JSON only · 500 components · 512 KB maximum</p>
           <button className="primary-button wide" disabled={busy === "sbom"}>{busy === "sbom" ? <Loader2 className="spin" size={17} /> : <UploadCloud size={17} />}Validate and import</button>
         </form>
+      </Modal>
+
+      <Modal open={commandModal} onClose={() => { setCommandModal(false); setCommandQuery(""); }} title="Search SupplyLens" subtitle="Jump to a workspace, repository, package, or vulnerability.">
+        <div className="command-palette"><label><ScanSearch size={18} /><input autoFocus value={commandQuery} onChange={(event) => setCommandQuery(event.target.value)} placeholder="Type to search…" /></label><div className="command-results">{navigation.filter((item) => item.label.toLowerCase().includes(commandQuery.toLowerCase())).map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { selectView(id); setCommandModal(false); setCommandQuery(""); }}><Icon size={16} /><span><strong>{label}</strong><small>Workspace</small></span><ChevronRight size={14} /></button>)}{commandQuery && data.repositories.filter((repository) => repository.name.toLowerCase().includes(commandQuery.toLowerCase())).slice(0, 3).map((repository) => <button key={`repo-${repository.id}`} onClick={() => { selectView("repositories"); setCommandModal(false); setCommandQuery(""); }}><Database size={16} /><span><strong>{repository.name}</strong><small>{repository.ecosystem} repository</small></span><ChevronRight size={14} /></button>)}{commandQuery && data.findings.filter((finding) => `${finding.vulnerabilityId} ${finding.packageName}`.toLowerCase().includes(commandQuery.toLowerCase())).slice(0, 3).map((finding) => <button key={`finding-${finding.id}`} onClick={() => { setSearch(commandQuery); selectView("findings"); setCommandModal(false); setCommandQuery(""); }}><TriangleAlert size={16} /><span><strong>{finding.vulnerabilityId}</strong><small>{finding.packageName} · {finding.severity}</small></span><ChevronRight size={14} /></button>)}</div></div>
       </Modal>
 
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
