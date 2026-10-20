@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | Presentation | Interaction and responsive visualization | `app/dashboard.tsx`, `components/supplylens/` |
 | Application | Validate commands and coordinate use cases | `server/*-service.ts`, `server/contracts.mjs` |
-| Domain | Business calculations and graph algorithms | `domain/risk-engine.mjs`, `domain/sbom-analyzer.mjs` |
+| Domain | Business calculations and graph algorithms | `domain/risk-engine.mjs`, `domain/sbom-analyzer.mjs`, `domain/security-insights.mjs` |
 | Infrastructure | Persistence and external services | `db/`, D1, OSV API |
 
 Dependencies point inward: the domain layer does not import framework or persistence code.
@@ -51,6 +51,12 @@ sequenceDiagram
   API->>D1: Persist scan, timestamp, and audit event
   D1-->>API: Updated read model
   API-->>UI: Refreshed dashboard
+
+  User->>UI: Compare security posture
+  UI->>API: GET /api/dashboard
+  API->>D1: Load latest scan aggregates and enabled policies
+  API->>API: Calculate scan deltas and policy decisions
+  API-->>UI: Evidence-backed comparison and gate state
 ```
 
 ## Deployment
@@ -66,6 +72,8 @@ The Next.js-compatible application is compiled by Vinext into a Cloudflare Worke
 - External OSV calls use a bounded timeout and normalized 502/503 responses.
 - `/api/health` performs an actual D1 query rather than returning a static status.
 - SBOM analysis completes validation before persistence, detects cycles, and batches dense edge writes below D1 bind limits.
+- Scan comparisons use only persisted aggregate snapshots; package-level additions and removals are not claimed without immutable component snapshots.
+- Policy evaluation distinguishes automated decisions from rules that still require human review.
 
 ## Deliberate tradeoffs
 
@@ -73,3 +81,4 @@ The Next.js-compatible application is compiled by Vinext into a Cloudflare Worke
 - D1 keeps the deployment small and portable; PostgreSQL would be appropriate for heavier analytical workloads.
 - CycloneDX JSON is supported today; SPDX and scheduled repository ingestion remain future increments.
 - Imports replace the selected repository's current normalized graph while preserving historical scan and audit records.
+- The current diff engine compares persisted scan aggregates. Per-package historical diffs require snapshotting each scan's component graph and remain a planned increment.

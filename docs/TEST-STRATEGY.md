@@ -2,13 +2,13 @@
 
 ## Test pyramid
 
-1. **Domain unit tests:** risk weighting, score caps, classification, severity aggregation, shortest-path traversal, SBOM normalization, depth calculation, and cycle detection.
+1. **Domain unit tests:** risk weighting, score caps, classification, severity aggregation, shortest-path traversal, SBOM normalization, depth calculation, cycle detection, scan comparison, and policy-gate decisions.
 2. **Contract and API checks:** strict payload validation, status codes, database constraints, state changes, and normalized OSV responses.
 3. **User-flow checks:** navigation, repository creation, scanning, policy toggles, report export, and responsive layouts.
 
 ## Automated checks included
 
-`npm test` runs 13 Node.js tests covering the risk engine, breadth-first dependency traversal, CycloneDX graph analysis, cycle safety, import limits, and every API command contract. `npm run lint` verifies source quality, and `npm run build` performs TypeScript and production compilation checks.
+`npm test` runs 16 Node.js tests covering the risk engine, breadth-first dependency traversal, CycloneDX graph analysis, cycle safety, import limits, scan comparison, policy-gate decisions, and every API command contract. `npm run lint` verifies source quality, and `npm run build` performs TypeScript and production compilation checks.
 
 The release smoke test also starts the compiled Cloudflare Worker and verifies:
 
@@ -30,6 +30,10 @@ The release smoke test also starts the compiled Cloudflare Worker and verifies:
 | Pause a policy | Coverage score changes and persists after reload |
 | Check `lodash@4.17.20` | Live OSV advisories are displayed |
 | Search by CVE or package | Findings reduce to matching rows |
+| Open a finding | Detail drawer explains CVSS, exposure path, status, and remediation evidence |
+| Compare two scans | Persisted dependency, finding, and risk-score deltas are shown without invented package changes |
+| Evaluate the policy gate | Critical blocking rules fail with evidence; unsupported rules request review |
+| Search the SBOM graph | Nodes and edges filter together and the component inspector reflects the selected node |
 | Export report | Browser downloads valid JSON |
 | Simulate a slow OSV response | Request is stopped after eight seconds with a safe upstream error |
 

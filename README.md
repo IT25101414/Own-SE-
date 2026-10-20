@@ -19,11 +19,15 @@ Software supply-chain failures are listed as **A03 in the OWASP Top 10:2025**. M
 - Direct versus transitive dependency paths
 - CycloneDX SBOM ingestion with a 500-component and 512 KB safety limit
 - Dependency-graph analysis with breadth-first depth, shortest exposure paths, cycle detection, isolated-node detection, and license coverage
+- Interactive dependency graph with search, relationship filters, severity signals, and a component inspector
 - Normalized PURL-indexed component inventory and persisted dependency edges
 - Live package-version checks against the public OSV API
-- Configurable security policies and coverage score
+- Automated policy gate with PASS, FAIL, or REVIEW REQUIRED decisions and evidence
+- Aggregate scan comparison showing introduced, resolved, and unchanged exposure without fabricating package-level history
+- Explainable remediation drawer with dependency path, CVSS context, and safe upgrade guidance
+- Security alert center and risk-posture timeline derived from persisted scans and audit events
 - JSON security-report export
-- Responsive dashboard with repository, findings, policy, and architecture views
+- Premium responsive dark/light interface with command palette, repository, findings, SBOM, policy, alert, comparison, and architecture views
 - Seeded demo workspace for immediate evaluation
 - Typed request contracts, structured API errors, and a database health endpoint
 
@@ -100,7 +104,7 @@ npm run build
 
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
-| `/api/dashboard` | `GET` | Aggregate dashboard read model |
+| `/api/dashboard` | `GET` | Aggregate dashboard, policy-gate, and scan-comparison read model |
 | `/api/health` | `GET` | Verify the API and D1 connection |
 | `/api/repositories` | `POST` | Add a repository and baseline scan |
 | `/api/scans` | `POST` | Run and persist a repository scan |
