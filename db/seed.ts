@@ -1,5 +1,8 @@
 import { getDb } from ".";
-import { auditEvents, policies, repositories, scans, scanFindings, vulnerabilities } from "./schema";
+import {
+  auditEvents, dependencyComponents, dependencyEdges, policies, repositories,
+  repositoryDependencies, sbomImports, scans, scanFindings, vulnerabilities,
+} from "./schema";
 
 export async function ensureSeedData() {
   const db = getDb();
@@ -49,4 +52,37 @@ export async function ensureSeedData() {
     { id: 2, eventType: "scan.completed", entityType: "repository", entityId: "1", message: "Completed dependency risk scan for checkout-api.", createdAt: "2026-10-19T15:42:00.000Z" },
     { id: 3, eventType: "policy.reviewed", entityType: "policy", entityId: "1", message: "Critical vulnerability release gate reviewed.", createdAt: "2026-10-18T12:00:00.000Z" },
   ]).onConflictDoNothing();
+
+  const existingSbom = await db.select({ id: sbomImports.id }).from(sbomImports).limit(1);
+  if (existingSbom.length === 0) {
+    await db.insert(dependencyComponents).values([
+      { id: 1, purl: "pkg:maven/org.springframework/spring-web@6.1.4", name: "spring-web", version: "6.1.4", ecosystem: "Maven", license: "Apache-2.0" },
+      { id: 2, purl: "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.17.1", name: "jackson-databind", version: "2.17.1", ecosystem: "Maven", license: "Apache-2.0" },
+      { id: 3, purl: "pkg:maven/org.slf4j/slf4j-api@2.0.12", name: "slf4j-api", version: "2.0.12", ecosystem: "Maven", license: "MIT" },
+      { id: 4, purl: "pkg:maven/io.micrometer/micrometer-core@1.12.4", name: "micrometer-core", version: "1.12.4", ecosystem: "Maven", license: "Apache-2.0" },
+      { id: 5, purl: "pkg:maven/org.yaml/snakeyaml@2.2", name: "snakeyaml", version: "2.2", ecosystem: "Maven", license: "Apache-2.0" },
+    ]).onConflictDoNothing();
+
+    await db.insert(repositoryDependencies).values([
+      { id: 1, repositoryId: 1, dependencyId: 1, direct: true, depth: 1, componentRef: "spring-web" },
+      { id: 2, repositoryId: 1, dependencyId: 2, direct: false, depth: 2, componentRef: "jackson-databind" },
+      { id: 3, repositoryId: 1, dependencyId: 3, direct: false, depth: 2, componentRef: "slf4j-api" },
+      { id: 4, repositoryId: 1, dependencyId: 4, direct: true, depth: 1, componentRef: "micrometer-core" },
+      { id: 5, repositoryId: 1, dependencyId: 5, direct: false, depth: 2, componentRef: "snakeyaml" },
+    ]).onConflictDoNothing();
+
+    await db.insert(dependencyEdges).values([
+      { id: 1, repositoryId: 1, parentRef: "checkout-api", childRef: "spring-web" },
+      { id: 2, repositoryId: 1, parentRef: "spring-web", childRef: "jackson-databind" },
+      { id: 3, repositoryId: 1, parentRef: "spring-web", childRef: "slf4j-api" },
+      { id: 4, repositoryId: 1, parentRef: "checkout-api", childRef: "micrometer-core" },
+      { id: 5, repositoryId: 1, parentRef: "spring-web", childRef: "snakeyaml" },
+    ]).onConflictDoNothing();
+
+    await db.insert(sbomImports).values({
+      id: 1, repositoryId: 1, scanId: 1, format: "CycloneDX 1.5", serialNumber: "urn:uuid:supplylens-demo",
+      componentCount: 5, directCount: 2, transitiveCount: 3, isolatedCount: 0, maxDepth: 2,
+      cycleCount: 0, licenseCoverage: 100, importedAt: "2026-10-19T15:42:00.000Z",
+    }).onConflictDoNothing();
+  }
 }

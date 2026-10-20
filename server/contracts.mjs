@@ -25,3 +25,10 @@ export const osvQuerySchema = z.object({
   packageName: z.string().trim().min(2).max(160),
   version: z.string().trim().min(1).max(64),
 }).strict();
+
+export const importSbomSchema = z.object({
+  repositoryName: z.string().trim().min(3).max(64)
+    .transform((value) => value.toLowerCase().replace(/[^a-z0-9-_]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""))
+    .refine((value) => value.length >= 3, "Repository name must contain at least three valid characters."),
+  sbom: z.record(z.unknown()),
+}).strict();

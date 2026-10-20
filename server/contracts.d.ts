@@ -14,3 +14,4 @@ export declare const osvQuerySchema: z.ZodType<{
   packageName: string;
   version: string;
 }>;
+export declare const importSbomSchema: z.ZodType<{ repositoryName: string; sbom: Record<string, unknown> }>;

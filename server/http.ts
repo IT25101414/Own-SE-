@@ -7,11 +7,20 @@ export class ApiError extends Error {
   }
 }
 
-export async function parseJson<T>(request: Request, schema: ZodType<T>): Promise<T> {
+export async function parseJson<T>(request: Request, schema: ZodType<T>, options: { maxBytes?: number } = {}): Promise<T> {
+  const maxBytes = options.maxBytes ?? 32_768;
+  const announcedLength = Number(request.headers.get("content-length") ?? 0);
+  if (announcedLength > maxBytes) throw new ApiError(`Request body exceeds the ${maxBytes}-byte limit.`, 413, "PAYLOAD_TOO_LARGE");
+
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) {
+      throw new ApiError(`Request body exceeds the ${maxBytes}-byte limit.`, 413, "PAYLOAD_TOO_LARGE");
+    }
+    body = JSON.parse(text);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError("Request body must be valid JSON.", 400, "INVALID_JSON");
   }
 

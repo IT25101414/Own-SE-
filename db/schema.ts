@@ -70,3 +70,47 @@ export const auditEvents = sqliteTable("audit_events", {
   actor: text("actor").notNull().default("portfolio-user"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const dependencyComponents = sqliteTable("dependency_components", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  purl: text("purl").notNull().unique(),
+  name: text("name").notNull(),
+  version: text("version").notNull(),
+  ecosystem: text("ecosystem").notNull(),
+  license: text("license").notNull().default("Unknown"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const repositoryDependencies = sqliteTable("repository_dependencies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  repositoryId: integer("repository_id").notNull().references(() => repositories.id, { onDelete: "cascade" }),
+  dependencyId: integer("dependency_id").notNull().references(() => dependencyComponents.id, { onDelete: "cascade" }),
+  direct: integer("direct", { mode: "boolean" }).notNull().default(false),
+  depth: integer("depth").notNull().default(-1),
+  componentRef: text("component_ref").notNull(),
+  importedAt: text("imported_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const dependencyEdges = sqliteTable("dependency_edges", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  repositoryId: integer("repository_id").notNull().references(() => repositories.id, { onDelete: "cascade" }),
+  parentRef: text("parent_ref").notNull(),
+  childRef: text("child_ref").notNull(),
+  importedAt: text("imported_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const sbomImports = sqliteTable("sbom_imports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  repositoryId: integer("repository_id").notNull().references(() => repositories.id, { onDelete: "cascade" }),
+  scanId: integer("scan_id").notNull().references(() => scans.id, { onDelete: "cascade" }),
+  format: text("format").notNull(),
+  serialNumber: text("serial_number").notNull(),
+  componentCount: integer("component_count").notNull(),
+  directCount: integer("direct_count").notNull(),
+  transitiveCount: integer("transitive_count").notNull(),
+  isolatedCount: integer("isolated_count").notNull(),
+  maxDepth: integer("max_depth").notNull(),
+  cycleCount: integer("cycle_count").notNull(),
+  licenseCoverage: integer("license_coverage").notNull(),
+  importedAt: text("imported_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

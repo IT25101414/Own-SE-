@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createRepositorySchema,
+  importSbomSchema,
   osvQuerySchema,
   runScanSchema,
   updatePolicySchema,
@@ -45,4 +46,13 @@ test("OSV query trims coordinates and limits accepted ecosystems", () => {
   assert.equal(result.packageName, "requests");
   assert.equal(result.version, "2.31.0");
   assert.equal(osvQuerySchema.safeParse({ ecosystem: "Go", packageName: "x", version: "1" }).success, false);
+});
+
+test("SBOM command normalizes its repository and requires an object document", () => {
+  const result = importSbomSchema.parse({
+    repositoryName: "Payments API!",
+    sbom: { bomFormat: "CycloneDX", components: [] },
+  });
+  assert.equal(result.repositoryName, "payments-api");
+  assert.equal(importSbomSchema.safeParse({ repositoryName: "api", sbom: [] }).success, false);
 });

@@ -15,6 +15,13 @@
       "when": 1792431247887,
       "tag": "0001_ancient_drax",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792477822508,
+      "tag": "0002_shiny_absorbing_man",
+      "breakpoints": true
     }
   ]
 }
