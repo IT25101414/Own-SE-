@@ -2,20 +2,45 @@
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
-  Check, ChevronRight, Database, Download, ExternalLink, Loader2, Menu,
-  Plus, ScanSearch, ShieldCheck, TriangleAlert, X,
+  Check, ChevronRight, Database, Download, ExternalLink, FileJson, Loader2, Menu,
+  Plus, ScanSearch, ShieldCheck, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { DashboardData, Repository } from "@/lib/types";
 import {
-  Architecture, Findings, Overview, Policies, Repositories, navigation,
+  Architecture, Findings, Overview, Policies, Repositories, SbomLab, navigation,
   type View,
 } from "@/components/supplylens/views";
 
 type OsvResult = { packageName: string; version: string; ecosystem: string; checkedAt: string; vulnerabilities: Array<{ id: string; summary: string; modified?: string; aliases: string[] }> };
+type SbomResult = { dashboard: DashboardData; analysis: { metrics: { componentCount: number; directCount: number; transitiveCount: number; maxDepth: number; cycleCount: number }; vulnerabilities: unknown[] } };
+
+const SAMPLE_SBOM = {
+  bomFormat: "CycloneDX",
+  specVersion: "1.5",
+  serialNumber: "urn:uuid:supplylens-portfolio-sample",
+  metadata: { component: { "bom-ref": "payments-api", type: "application", name: "payments-api", version: "1.0.0" } },
+  components: [
+    { "bom-ref": "express", type: "library", name: "express", version: "4.18.2", purl: "pkg:npm/express@4.18.2", licenses: [{ license: { id: "MIT" } }] },
+    { "bom-ref": "body-parser", type: "library", name: "body-parser", version: "1.20.2", purl: "pkg:npm/body-parser@1.20.2", licenses: [{ license: { id: "MIT" } }] },
+    { "bom-ref": "qs", type: "library", name: "qs", version: "6.11.0", purl: "pkg:npm/qs@6.11.0", licenses: [{ license: { id: "BSD-3-Clause" } }] },
+    { "bom-ref": "jsonwebtoken", type: "library", name: "jsonwebtoken", version: "9.0.1", purl: "pkg:npm/jsonwebtoken@9.0.1", licenses: [{ license: { id: "MIT" } }] },
+    { "bom-ref": "lodash", type: "library", name: "lodash", version: "4.17.20", purl: "pkg:npm/lodash@4.17.20", licenses: [{ license: { id: "MIT" } }] },
+  ],
+  dependencies: [
+    { ref: "payments-api", dependsOn: ["express", "jsonwebtoken"] },
+    { ref: "express", dependsOn: ["body-parser"] },
+    { ref: "body-parser", dependsOn: ["qs", "lodash"] },
+  ],
+  vulnerabilities: [
+    { id: "GHSA-35jh-r3h4-6jhm", ratings: [{ severity: "high", score: 7.5 }], affects: [{ ref: "qs" }], description: "Prototype pollution exposure reported in the imported SBOM.", analysis: { detail: "Upgrade to 6.11.2" } },
+    { id: "CVE-2021-23337", ratings: [{ severity: "medium", score: 5.3 }], affects: [{ ref: "lodash" }], description: "Command injection risk in an affected lodash version.", analysis: { detail: "Upgrade to 4.17.21" } },
+  ],
+};
 
 const viewCopy: Record<View, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "Security posture", title: "Your supply chain, in focus.", description: "Prioritize dependency risk across every repository from one calm workspace." },
   repositories: { eyebrow: "Repository inventory", title: "Know what you ship.", description: "Track ecosystems, dependency volume, scan health, and ownership." },
+  sbom: { eyebrow: "Software bill of materials", title: "Map every dependency relationship.", description: "Import CycloneDX, analyze the graph, and persist a traceable component inventory." },
   findings: { eyebrow: "Vulnerability intelligence", title: "Fix what matters first.", description: "Investigate direct and transitive exposure with clear upgrade paths." },
   policies: { eyebrow: "Policy engine", title: "Turn standards into guardrails.", description: "Apply consistent release checks without slowing down developers." },
   architecture: { eyebrow: "Engineering evidence", title: "Designed as a modular monolith.", description: "A practical DDD architecture with testable domain services and clear boundaries." },
@@ -34,6 +59,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [repositoryModal, setRepositoryModal] = useState(false);
   const [checkModal, setCheckModal] = useState(false);
+  const [sbomModal, setSbomModal] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [osvResult, setOsvResult] = useState<OsvResult | null>(null);
@@ -124,6 +150,28 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
     }
   }
 
+  async function handleSbomImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy("sbom");
+    try {
+      const form = new FormData(event.currentTarget);
+      const document = JSON.parse(String(form.get("document") ?? ""));
+      const result = await readJson(await fetch("/api/sbom", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repositoryName: form.get("repositoryName"), sbom: document }),
+      })) as SbomResult;
+      setData(result.dashboard);
+      setSbomModal(false);
+      setView("sbom");
+      notify(`SBOM imported: ${result.analysis.metrics.componentCount} components analyzed.`);
+    } catch (error) {
+      notify(error instanceof SyntaxError ? "The SBOM is not valid JSON." : error instanceof Error ? error.message : "SBOM import failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function exportReport() {
     const report = JSON.stringify({ exportedAt: new Date().toISOString(), ...data }, null, 2);
     const url = URL.createObjectURL(new Blob([report], { type: "application/json" }));
@@ -181,6 +229,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
           </section>
           {view === "overview" && <Overview data={data} onView={selectView} onScan={handleScan} busy={busy} />}
           {view === "repositories" && <Repositories data={data} onScan={handleScan} busy={busy} onAdd={() => setRepositoryModal(true)} />}
+          {view === "sbom" && <SbomLab data={data} onImport={() => setSbomModal(true)} />}
           {view === "findings" && <Findings findings={filteredFindings} search={search} setSearch={setSearch} />}
           {view === "policies" && <Policies data={data} onToggle={handlePolicy} busy={busy} />}
           {view === "architecture" && <Architecture />}
@@ -204,6 +253,15 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
           <button className="primary-button wide" disabled={busy === "osv"}>{busy === "osv" ? <Loader2 className="spin" size={17} /> : <ScanSearch size={17} />}Check OSV database</button>
         </form>
         {osvResult && <OsvResults result={osvResult} />}
+      </Modal>
+
+      <Modal open={sbomModal} onClose={() => setSbomModal(false)} title="Import CycloneDX SBOM" subtitle="Analyze components, dependency edges, vulnerabilities, licenses, graph depth, and cycles.">
+        <form className="modal-form" onSubmit={handleSbomImport}>
+          <label>Repository name<input name="repositoryName" defaultValue="payments-api" required minLength={3} /></label>
+          <label>SBOM document<textarea name="document" className="json-editor" defaultValue={JSON.stringify(SAMPLE_SBOM, null, 2)} required spellCheck={false} /></label>
+          <p className="form-note"><FileJson size={15} />CycloneDX JSON only · 500 components · 512 KB maximum</p>
+          <button className="primary-button wide" disabled={busy === "sbom"}>{busy === "sbom" ? <Loader2 className="spin" size={17} /> : <UploadCloud size={17} />}Validate and import</button>
+        </form>
       </Modal>
 
       {toast && <div className="toast"><Check size={16} />{toast}</div>}

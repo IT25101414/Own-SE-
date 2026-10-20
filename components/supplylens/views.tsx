@@ -3,18 +3,19 @@
 import { useState, type CSSProperties } from "react";
 import {
   Activity, ArrowUpRight, BookOpen, Boxes, Braces, ChevronRight,
-  CircleCheck, Clock3, Database, FileCheck2, GitBranch, LayoutDashboard,
+  CircleCheck, Clock3, Database, FileCheck2, FileJson, GitBranch, LayoutDashboard,
   Loader2, Network, PackageCheck, Play, Plus, ScanSearch, Search,
-  ServerCog, ShieldAlert, ShieldCheck, SlidersHorizontal, TriangleAlert,
+  ServerCog, ShieldAlert, ShieldCheck, SlidersHorizontal, TriangleAlert, UploadCloud, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import type { DashboardData, Finding, Repository } from "@/lib/types";
 
-export type View = "overview" | "repositories" | "findings" | "policies" | "architecture";
+export type View = "overview" | "repositories" | "sbom" | "findings" | "policies" | "architecture";
 
 export const navigation: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "repositories", label: "Repositories", icon: Boxes },
+  { id: "sbom", label: "SBOM Lab", icon: FileJson },
   { id: "findings", label: "Findings", icon: ShieldAlert },
   { id: "policies", label: "Policies", icon: SlidersHorizontal },
   { id: "architecture", label: "Architecture", icon: Network },
@@ -129,6 +130,58 @@ export function Policies({ data, onToggle, busy }: { data: DashboardData; onTogg
   return <div className="policy-layout"><section className="policy-list">{data.policies.map((policy) => <article className="policy-card" key={policy.id}><div className={`policy-symbol ${policy.enabled ? "enabled" : ""}`}><FileCheck2 size={20} /></div><div className="policy-copy"><div><span>{policy.category}</span><h3>{policy.name}</h3></div><p>{policy.description}</p><footer><span>{policy.scope}</span><i>•</i><strong>{policy.action}</strong></footer></div><button className={`switch ${policy.enabled ? "on" : ""}`} onClick={() => onToggle(policy.id, !policy.enabled)} disabled={busy === `policy-${policy.id}`} aria-label={`${policy.enabled ? "Disable" : "Enable"} ${policy.name}`}><span /></button></article>)}</section><aside className="card policy-score"><div className="policy-shield"><ShieldCheck size={28} /></div><p>Policy coverage</p><strong>{data.stats.policyCoverage}%</strong><span>{data.policies.filter((policy) => policy.enabled).length} of {data.policies.length} guardrails actively protect releases.</span><div className="coverage-track"><i style={{ width: `${data.stats.policyCoverage}%` }} /></div><small>Target: 100% before production</small></aside></div>;
 }
 
+export function SbomLab({ data, onImport }: { data: DashboardData; onImport: () => void }) {
+  const latest = data.sbomImports[0];
+  const repositoryId = latest?.repositoryId ?? data.repositories[0]?.id;
+  const components = data.components.filter((component) => component.repositoryId === repositoryId);
+  const edges = data.dependencyEdges.filter((edge) => edge.repositoryId === repositoryId);
+  const direct = components.filter((component) => component.direct);
+  const transitive = components.filter((component) => !component.direct && component.depth >= 0);
+  return <div className="sbom-layout">
+    <section className="sbom-hero">
+      <div><p className="card-kicker">CycloneDX ingestion pipeline</p><h2>Turn an SBOM into an explorable dependency graph.</h2><p>SupplyLens validates, normalizes, analyzes, and persists up to 500 components per import.</p></div>
+      <button className="primary-button" onClick={onImport}><UploadCloud size={17} />Import SBOM</button>
+    </section>
+
+    <section className="card sbom-pipeline" aria-label="SBOM processing pipeline">
+      <div className="card-header"><div><p className="card-kicker">Backend workflow</p><h2>Validated ingestion from JSON to queryable graph</h2></div><Workflow size={18} /></div>
+      <div className="pipeline-wrap">
+        {[{ step: "01", title: "Validate", detail: "Format, size, unique refs" }, { step: "02", title: "Normalize", detail: "PURLs, licenses, ecosystems" }, { step: "03", title: "Analyze", detail: "BFS depth, cycles, paths" }, { step: "04", title: "Persist", detail: "D1 components, edges, findings" }].map((item) => <article className="pipeline-stage" key={item.step}><span>{item.step}</span><strong>{item.title}</strong><small>{item.detail}</small></article>)}
+      </div>
+    </section>
+
+    {latest ? <>
+      <section className="sbom-metrics">
+        <article><span>Components</span><strong>{latest.componentCount}</strong><small>{latest.format}</small></article>
+        <article><span>Direct / transitive</span><strong>{latest.directCount}<i>/</i>{latest.transitiveCount}</strong><small>Maximum depth {latest.maxDepth}</small></article>
+        <article><span>Graph health</span><strong>{latest.cycleCount === 0 ? "Acyclic" : `${latest.cycleCount} cycles`}</strong><small>{latest.isolatedCount} isolated nodes</small></article>
+        <article><span>License coverage</span><strong>{latest.licenseCoverage}%</strong><small>{latest.repositoryName}</small></article>
+      </section>
+
+      <section className="sbom-grid">
+        <article className="card graph-card">
+          <div className="card-header"><div><p className="card-kicker">Dependency graph</p><h2>{latest.repositoryName}</h2></div><span className="architecture-badge">{edges.length} edges</span></div>
+          <div className="graph-root"><span><Boxes size={18} /></span><strong>{latest.repositoryName}</strong></div>
+          <div className="graph-level"><span className="level-label">Direct</span><div>{direct.slice(0, 4).map((component) => <div className="graph-node direct" key={component.id}><strong>{component.name}</strong><span>{component.version}</span></div>)}</div></div>
+          <div className="graph-level"><span className="level-label">Transitive</span><div>{transitive.slice(0, 5).map((component) => <div className="graph-node" key={component.id}><strong>{component.name}</strong><span>depth {component.depth}</span></div>)}</div></div>
+          {components.length === 0 && <div className="empty-state"><FileJson size={26} /><strong>No normalized components yet</strong></div>}
+        </article>
+
+        <article className="card activity-card">
+          <div className="card-header"><div><p className="card-kicker">Append-only trail</p><h2>Recent backend events</h2></div><Activity size={18} /></div>
+          <div className="audit-list">{data.auditEvents.slice(0, 6).map((event) => <article key={event.id}><span className="audit-dot" /><div><strong>{event.eventType.replaceAll(".", " ")}</strong><p>{event.message}</p><span>{formatRelative(event.createdAt)}</span></div></article>)}</div>
+        </article>
+      </section>
+
+      <section className="card component-table-card">
+        <div className="card-header"><div><p className="card-kicker">Normalized inventory</p><h2>Package components</h2></div><span className="architecture-badge">PURL indexed</span></div>
+        <div className="component-head"><span>Package</span><span>Relationship</span><span>Ecosystem</span><span>License</span></div>
+        {components.slice(0, 12).map((component) => <div className="component-row" key={component.id}><div><strong>{component.name}</strong><code>{component.version}</code><small>{component.purl}</small></div><span className={`relationship ${component.direct ? "direct" : ""}`}>{component.direct ? "Direct" : component.depth < 0 ? "Isolated" : `Depth ${component.depth}`}</span><span>{component.ecosystem}</span><span>{component.license}</span></div>)}
+      </section>
+    </> : <section className="card empty-sbom"><FileJson size={34} /><h2>No SBOM imported</h2><p>Import a CycloneDX document to build the first dependency graph.</p><button className="primary-button" onClick={onImport}>Import sample</button></section>}
+  </div>;
+}
+
 export function Architecture() {
   const contexts = [
     { icon: Boxes, title: "Repository Inventory", text: "Ownership, ecosystems and manifest metadata", tone: "blue" },
@@ -136,5 +189,5 @@ export function Architecture() {
     { icon: ShieldAlert, title: "Vulnerability Intelligence", text: "OSV advisories, severity and remediation", tone: "coral" },
     { icon: SlidersHorizontal, title: "Policy Management", text: "Guardrails, scope and release decisions", tone: "green" },
   ];
-  return <div className="architecture-layout"><section className="card context-map"><div className="card-header"><div><p className="card-kicker">DDD context map</p><h2>Boundaries before services</h2></div><span className="architecture-badge">Modular monolith</span></div><div className="context-flow">{contexts.map(({ icon: Icon, title, text, tone }, index) => <div className="context-wrap" key={title}><article className={`context-card ${tone}`}><span><Icon size={20} /></span><h3>{title}</h3><p>{text}</p></article>{index < contexts.length - 1 && <ChevronRight className="context-arrow" size={18} />}</div>)}</div></section><section className="engineering-grid"><article className="card engineering-card"><span><ServerCog size={21} /></span><h3>Application layer</h3><p>Next.js route handlers orchestrate use cases while domain logic stays framework independent.</p><code>app/api/* → domain services</code></article><article className="card engineering-card"><span><Database size={21} /></span><h3>Persistence layer</h3><p>Drizzle ORM and Cloudflare D1 provide typed queries, foreign keys, and migration history.</p><code>D1 / SQLite + repositories</code></article><article className="card engineering-card"><span><Activity size={21} /></span><h3>Quality strategy</h3><p>Unit tests protect scoring and graph traversal; API and UI checks cover integrations.</p><code>node:test + CI workflow</code></article><article className="card engineering-card"><span><BookOpen size={21} /></span><h3>Decision records</h3><p>Architecture, domain language, tradeoffs, and test strategy are documented in the repository.</p><code>docs/architecture/*</code></article></section><section className="principles-strip"><div><strong>5</strong><span>Bounded contexts</span></div><div><strong>4</strong><span>API workflows</span></div><div><strong>4</strong><span>Domain unit tests</span></div><div><strong>1</strong><span>Deployable unit</span></div></section></div>;
+  return <div className="architecture-layout"><section className="card context-map"><div className="card-header"><div><p className="card-kicker">DDD context map</p><h2>Boundaries before services</h2></div><span className="architecture-badge">Modular monolith</span></div><div className="context-flow">{contexts.map(({ icon: Icon, title, text, tone }, index) => <div className="context-wrap" key={title}><article className={`context-card ${tone}`}><span><Icon size={20} /></span><h3>{title}</h3><p>{text}</p></article>{index < contexts.length - 1 && <ChevronRight className="context-arrow" size={18} />}</div>)}</div></section><section className="engineering-grid"><article className="card engineering-card"><span><ServerCog size={21} /></span><h3>Application layer</h3><p>Next.js route handlers orchestrate use cases while domain logic stays framework independent.</p><code>app/api/* → domain services</code></article><article className="card engineering-card"><span><Database size={21} /></span><h3>Persistence layer</h3><p>Drizzle ORM and Cloudflare D1 provide typed queries, foreign keys, and migration history.</p><code>D1 / SQLite + repositories</code></article><article className="card engineering-card"><span><Activity size={21} /></span><h3>Quality strategy</h3><p>Unit tests protect scoring and graph traversal; API and UI checks cover integrations.</p><code>node:test + CI workflow</code></article><article className="card engineering-card"><span><BookOpen size={21} /></span><h3>Decision records</h3><p>Architecture, domain language, tradeoffs, and test strategy are documented in the repository.</p><code>docs/architecture/*</code></article></section><section className="principles-strip"><div><strong>5</strong><span>Bounded contexts</span></div><div><strong>7</strong><span>API endpoints</span></div><div><strong>13</strong><span>Automated tests</span></div><div><strong>1</strong><span>Deployable unit</span></div></section></div>;
 }
