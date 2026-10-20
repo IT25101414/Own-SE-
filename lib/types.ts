@@ -6,9 +6,21 @@ export type DependencyComponent = { id: number; repositoryId: number; repository
 export type DependencyEdge = { id: number; repositoryId: number; parentRef: string; childRef: string };
 export type SbomImport = { id: number; repositoryId: number; repositoryName: string; format: string; serialNumber: string; componentCount: number; directCount: number; transitiveCount: number; isolatedCount: number; maxDepth: number; cycleCount: number; licenseCoverage: number; importedAt: string };
 export type AuditEvent = { id: number; eventType: string; entityType: string; entityId: string; message: string; actor: string; createdAt: string };
+export type ScanComparison = {
+  repositoryId: number; repositoryName: string; previousScanId: number; currentScanId: number;
+  previous: { findings: number; dependencies: number; riskScore: number; scannedAt: string };
+  current: { findings: number; dependencies: number; riskScore: number; scannedAt: string };
+  changes: { introducedFindings: number; resolvedFindings: number; unchangedFindings: number; findingDelta: number; dependencyDelta: number; riskDelta: number; posture: "improved" | "regressed" | "stable" };
+};
+export type PolicyGate = {
+  state: "pass" | "fail" | "review"; evaluatedPolicies: number; enabledPolicies: number;
+  decisions: Array<{ policyId: number; policyName: string; outcome: "pass" | "fail"; reason: string }>;
+  notEvaluated: string[]; explanation: string;
+};
 export type DashboardData = {
   repositories: Repository[]; findings: Finding[]; policies: Policy[]; scans: Scan[];
   components: DependencyComponent[]; dependencyEdges: DependencyEdge[]; sbomImports: SbomImport[]; auditEvents: AuditEvent[];
+  scanComparisons: ScanComparison[]; policyGate: PolicyGate;
   stats: { repositories: number; dependencies: number; openFindings: number; critical: number; policyCoverage: number; averageRisk: number };
   severity: { critical: number; high: number; medium: number; low: number };
 };

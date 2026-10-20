@@ -6,6 +6,7 @@ import {
   repositoryDependencies, sbomImports, scans, scanFindings, vulnerabilities,
 } from "@/db/schema";
 import type { DashboardData } from "./types";
+import { compareScanSnapshots, evaluateSecurityGate } from "@/domain/security-insights.mjs";
 
 export async function getDashboardData(): Promise<DashboardData> {
   await ensureSeedData();
@@ -66,10 +67,17 @@ export async function getDashboardData(): Promise<DashboardData> {
   const openFindings = findingRows.filter((finding) => finding.status === "open");
   const enabledPolicies = policyRows.filter((policy) => policy.enabled).length;
   const averageRisk = repositoryRows.length ? Math.round(repositoryRows.reduce((total, repository) => total + repository.riskScore, 0) / repositoryRows.length) : 0;
+  const scanComparisons = repositoryRows.flatMap((repository) => {
+    const history = scanRows.filter((scan) => scan.repositoryId === repository.id);
+    if (history.length < 2) return [];
+    return [{ repositoryId: repository.id, repositoryName: repository.name, ...compareScanSnapshots(history[1], history[0]) }];
+  });
+  const policyGate = evaluateSecurityGate(openFindings, policyRows);
 
   return {
     repositories: repositoryRows, findings: findingRows, policies: policyRows, scans: scanRows,
     components: componentRows, dependencyEdges: edgeRows, sbomImports: sbomRows, auditEvents: auditRows,
+    scanComparisons, policyGate,
     stats: {
       repositories: repositoryRows.length,
       dependencies: repositoryRows.reduce((total, repository) => total + repository.dependencyCount, 0),
